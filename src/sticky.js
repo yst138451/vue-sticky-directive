@@ -1,3 +1,5 @@
+import { nextTick } from 'vue';
+
 const namespace = '@@vue-sticky-directive';
 const events = [
   'resize',
@@ -6,8 +8,8 @@ const events = [
   'touchmove',
   'touchend',
   'pageshow',
-  'load',
-];
+  'load'
+]
 
 const batchStyle = (el, style = {}, className = {}) => {
   for (let k in style) {
@@ -23,9 +25,8 @@ const batchStyle = (el, style = {}, className = {}) => {
 };
 
 class Sticky {
-  constructor(el, vm) {
+  constructor(el, options) {
     this.el = el;
-    this.vm = vm;
     this.unsubscribers = [];
     this.isPending = false;
     this.state = {
@@ -39,21 +40,23 @@ class Sticky {
     this.lastState = {
       top: null,
       bottom: null,
-      sticked: false,
+      stuck: false,
     };
 
-    const offset = this.getAttribute('sticky-offset') || {};
-    const side = this.getAttribute('sticky-side') || 'top';
-    const zIndex = this.getAttribute('sticky-z-index') || '10';
-    const onStick = this.getAttribute('on-stick') || null;
+    const {
+      offset = {},
+      side = 'top',
+      zIndex = '10',
+      onStick
+    } = options || {};
 
     this.options = {
       topOffset: Number(offset.top) || 0,
       bottomOffset: Number(offset.bottom) || 0,
       shouldTopSticky: side === 'top' || side === 'both',
       shouldBottomSticky: side === 'bottom' || side === 'both',
-      zIndex: zIndex,
-      onStick: onStick,
+      zIndex,
+      onStick,
     };
   }
 
@@ -61,8 +64,8 @@ class Sticky {
     if (this.unsubscribers.length > 0) {
       return;
     }
-    const { el, vm } = this;
-    vm.$nextTick(() => {
+    const { el } = this;
+    nextTick(() => {
       this.placeholderEl = document.createElement('div');
       this.containerEl = this.getContainerEl();
       el.parentNode.insertBefore(this.placeholderEl, el);
@@ -135,13 +138,13 @@ class Sticky {
       typeof this.options.onStick === 'function' &&
       (this.lastState.top !== this.state.isTopSticky ||
         this.lastState.bottom !== this.state.isBottomSticky ||
-        this.lastState.sticked !==
-          (this.state.isTopSticky || this.state.isBottomSticky))
+        this.lastState.stuck !==
+        (this.state.isTopSticky || this.state.isBottomSticky))
     ) {
       this.lastState = {
         top: this.state.isTopSticky,
         bottom: this.state.isBottomSticky,
-        sticked: this.state.isBottomSticky || this.state.isTopSticky,
+        stuck: this.state.isBottomSticky || this.state.isTopSticky,
       };
       this.options.onStick(this.lastState);
     }
@@ -251,48 +254,32 @@ class Sticky {
   getContainerElRect() {
     return this.containerEl.getBoundingClientRect();
   }
-
-  getAttribute(name) {
-    const expr = this.el.getAttribute(name);
-    let result = undefined;
-    if (expr) {
-      if (this.vm[expr]) {
-        result = this.vm[expr];
-      } else {
-        try {
-          result = eval(`(${expr})`);
-        } catch (error) {
-          result = expr;
-        }
-      }
-    }
-    return result;
-  }
 }
 
 export default {
-  inserted(el, bind, vnode) {
-    if (typeof bind.value === 'undefined' || bind.value) {
-      el[namespace] = new Sticky(el, vnode.context);
-      el[namespace].doBind();
-    }
+  mounted(el, binding, vnode) {
+    el[namespace] = new Sticky(el, binding.value);
+    el[namespace].doBind();
   },
-  unbind(el, bind, vnode) {
+  unmounted(el, bind, vnode) {
     if (el[namespace]) {
       el[namespace].doUnbind();
       el[namespace] = undefined;
     }
   },
-  componentUpdated(el, bind, vnode) {
-    if (typeof bind.value === 'undefined' || bind.value) {
+  updated(el, binding, vnode) {
+    const opts = binding.value;
+
+    if (typeof opts === 'undefined' || opts.enabled === true) {
       if (!el[namespace]) {
-        el[namespace] = new Sticky(el, vnode.context);
+        el[namespace] = new Sticky(el, opts);
       }
       el[namespace].doBind();
-    } else {
+    }
+    else {
       if (el[namespace]) {
         el[namespace].doUnbind();
       }
     }
-  },
+  }
 };
